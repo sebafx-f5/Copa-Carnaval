@@ -149,7 +149,7 @@ function logoUp(f,c){
   if(!f)return;
   if(!/^image\//.test(f.type)||f.size>MAX_LOGO_BYTES){alert('Elegí una imagen de hasta 5 MB.');return}
   const fr=new FileReader();
-  fr.onload=()=>{const im=new Image();im.onload=()=>{const z=96,cv=document.createElement('canvas');cv.width=cv.height=z;const s=Math.min(im.width,im.height);cv.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,z,z);S[c].l[upIdx]=cleanLogo(cv.toDataURL('image/png'));save(c);render()};im.src=fr.result};
+  fr.onload=()=>{const im=new Image();im.onload=()=>{const z=128,cv=document.createElement('canvas');cv.width=cv.height=z;const k=Math.min(z/im.width,z/im.height),w=im.width*k,h=im.height*k;cv.getContext('2d').drawImage(im,(z-w)/2,(z-h)/2,w,h);S[c].l[upIdx]=cleanLogo(cv.toDataURL('image/png'));save(c);render()};im.src=fr.result};
   fr.readAsDataURL(f)}
 const quiereAdmin=()=>location.pathname.replace(/\/+$/,'')==='/admin'||location.hash==='#admin';
 const isAdm=()=>!!session;

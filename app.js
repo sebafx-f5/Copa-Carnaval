@@ -138,7 +138,8 @@ function logoUp(f,c){
   const fr=new FileReader();
   fr.onload=()=>{const im=new Image();im.onload=()=>{const z=96,cv=document.createElement('canvas');cv.width=cv.height=z;const s=Math.min(im.width,im.height);cv.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,z,z);S[c].l[upIdx]=cleanLogo(cv.toDataURL('image/png'));save();render()};im.src=fr.result};
   fr.readAsDataURL(f)}
-function isAdm(){return location.pathname.replace(/\/+$/,'')==='/admin'||location.hash==='#admin'}
+const ADMIN_ENABLED=['','localhost','127.0.0.1'].includes(location.hostname);
+function isAdm(){return ADMIN_ENABLED&&(location.pathname.replace(/\/+$/,'')==='/admin'||location.hash==='#admin')}
 function ro(){
   const a=document.getElementById('app'),sw=(i,cl,t)=>{const x=document.createElement('span');x.className=cl;x.textContent=t;i.replaceWith(x)};
   a.querySelectorAll('input.sc').forEach(i=>sw(i,'sc ro',i.value===''?'–':i.value));

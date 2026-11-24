@@ -26,19 +26,27 @@ function sanitize(){
   d.go=(Array.isArray(d.go)?d.go:[]).filter(g=>g&&typeof g.m==='string'&&/^[a-z0-9-]{1,12}$/.test(g.m)&&Number.isInteger(+g.t)&&+g.t>=0&&+g.t<n&&String(g.p??'').trim()).map(g=>({m:g.m,t:+g.t,p:String(g.p).trim().slice(0,MAX_PLAYER),min:cleanMin(g.min)}));
  });
 }
+function guardarCopia(){try{localStorage.setItem('torneo-cache',JSON.stringify(S))}catch(e){}}
 async function save(c){
  const ids=c?[c]:CATS.map(x=>x.id);
+ guardarCopia();
  const {error}=await db.from('torneo').upsert(ids.map(id=>({categoria:id,datos:S[id],actualizado:new Date().toISOString()})));
  if(error)alert('No se pudo guardar: '+error.message)}
+let suscrito=false,sinConexion=false;
 async function cargar(){
  const {data,error}=await db.from('torneo').select('categoria,datos');
- if(error){document.getElementById('app').innerHTML='<p class="sub">No se pudieron cargar los datos. Recargá la página.</p>';return}
+ if(error){
+  let copia=null;try{copia=JSON.parse(localStorage.getItem('torneo-cache'))}catch(e){}
+  if(!copia){document.getElementById('app').innerHTML='<p class="sub">No se pudieron cargar los datos. Recargá la página.</p>';return}
+  S=copia;sanitize();sinConexion=true;listo=true;render();return}
  S=fresh();
  (data||[]).forEach(r=>{if(r.datos&&typeof r.datos==='object')S[r.categoria]=r.datos});
- sanitize();listo=true;render();
+ sanitize();sinConexion=false;listo=true;guardarCopia();render();
+ if(suscrito)return;suscrito=true;
  db.channel('torneo').on('postgres_changes',{event:'*',schema:'public',table:'torneo'},p=>{
   const r=p.new;if(!r||!CATS.some(x=>x.id===r.categoria))return;
-  S[r.categoria]=r.datos;sanitize();render()}).subscribe()}
+  S[r.categoria]=r.datos;sanitize();guardarCopia();render()}).subscribe()}
+addEventListener('online',cargar);
 const played=r=>!!r&&r[0]!==''&&r[1]!==''&&r[0]!=null&&r[1]!=null;
 function stand(c,g){
   const d=S[c],rows=[0,1,2].map(k=>({i:g*3+k,pj:0,g:0,e:0,p:0,gf:0,gc:0,pts:0}));let n=0;
@@ -167,7 +175,7 @@ function render(){
   if(!listo)body='<p class="sub">Cargando los datos…</p>';
   else if(login)body=loginView();
   else body=(view==='cal'?calView():view==='panel'?panelView():catView(view))+(isAdm()?'<button class="reset">Borrar todos los datos</button> <button class="lk" data-logout>Cerrar sesión</button>':'');
-  document.getElementById('app').innerHTML=body;
+  document.getElementById('app').innerHTML=(sinConexion?'<p class="sub">Sin conexión: se muestran los últimos datos guardados en este dispositivo.</p>':'')+body;
   document.getElementById('adm').hidden=!isAdm();
   if(listo&&!isAdm()&&!login)ro()}
 document.addEventListener('click',e=>{
@@ -205,3 +213,4 @@ db.auth.onAuthStateChange((_e,s)=>{session=s;render()});
 S=fresh();
 render();
 cargar();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js');

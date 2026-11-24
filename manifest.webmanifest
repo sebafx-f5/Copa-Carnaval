@@ -1,0 +1,16 @@
+{
+  "name": "Copa Carnaval 2026",
+  "short_name": "Copa Carnaval",
+  "description": "Fixture, resultados y posiciones de la Copa Carnaval 2026",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0C0C0C",
+  "theme_color": "#0C0C0C",
+  "lang": "es",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

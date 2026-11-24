@@ -1,3 +1,6 @@
+const SB_URL='https://wiqfibqjnhfclggjoupb.supabase.co';
+const SB_KEY='sb_publishable_SDuSirqFDyyhjgFR-2eCrw_DxN_QN85';
+const db=window.supabase.createClient(SB_URL,SB_KEY);
 const CATS=[{id:'ma',n:'Masculino A',g:4},{id:'mb',n:'Masculino B',g:2},{id:'f',n:'Femenino Libre',g:2},{id:'p',n:'Femenino Promocional',g:2}];
 const ng=c=>CATS.find(x=>x.id===c).g;
 const L='ABCD',PAIRS=[[0,1],[0,2],[1,2]];
@@ -5,7 +8,7 @@ const QF=[[[0,0],[1,1]],[[1,0],[0,1]],[[2,0],[3,1]],[[3,0],[2,1]]];
 const SF=[['qf0','qf2'],['qf1','qf3']];
 const SF2=[[[0,0],[1,1]],[[1,0],[0,1]]];
 const MAX_NAME=30,MAX_PLAYER=40,MAX_LOGO_BYTES=5*1024*1024,MAX_LOGO_CHARS=200000;
-let S,view='ma';
+let S,view='ma',session=null,listo=false;
 function fresh(){const o={};CATS.forEach(c=>{o[c.id]={t:Array.from({length:c.g*3},(_,i)=>'Equipo '+L[Math.floor(i/3)]+(i%3+1)),r:{},k:{},l:{},go:[]}});return o}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cleanScore=v=>{const s=String(v??'').trim();return/^\d{1,2}$/.test(s)?String(+s):''};
@@ -23,11 +26,19 @@ function sanitize(){
   d.go=(Array.isArray(d.go)?d.go:[]).filter(g=>g&&typeof g.m==='string'&&/^[a-z0-9-]{1,12}$/.test(g.m)&&Number.isInteger(+g.t)&&+g.t>=0&&+g.t<n&&String(g.p??'').trim()).map(g=>({m:g.m,t:+g.t,p:String(g.p).trim().slice(0,MAX_PLAYER),min:cleanMin(g.min)}));
  });
 }
-try{S=JSON.parse(localStorage.getItem('torneo-v1'))}catch(e){}
-if(!S||typeof S!=='object')S=fresh();
-function save(){try{localStorage.setItem('torneo-v1',JSON.stringify(S))}catch(e){}}
-sanitize();
-save();
+async function save(c){
+ const ids=c?[c]:CATS.map(x=>x.id);
+ const {error}=await db.from('torneo').upsert(ids.map(id=>({categoria:id,datos:S[id],actualizado:new Date().toISOString()})));
+ if(error)alert('No se pudo guardar: '+error.message)}
+async function cargar(){
+ const {data,error}=await db.from('torneo').select('categoria,datos');
+ if(error){document.getElementById('app').innerHTML='<p class="sub">No se pudieron cargar los datos. Recargá la página.</p>';return}
+ S=fresh();
+ (data||[]).forEach(r=>{if(r.datos&&typeof r.datos==='object')S[r.categoria]=r.datos});
+ sanitize();listo=true;render();
+ db.channel('torneo').on('postgres_changes',{event:'*',schema:'public',table:'torneo'},p=>{
+  const r=p.new;if(!r||!CATS.some(x=>x.id===r.categoria))return;
+  S[r.categoria]=r.datos;sanitize();render()}).subscribe()}
 const played=r=>!!r&&r[0]!==''&&r[1]!==''&&r[0]!=null&&r[1]!=null;
 function stand(c,g){
   const d=S[c],rows=[0,1,2].map(k=>({i:g*3+k,pj:0,g:0,e:0,p:0,gf:0,gc:0,pts:0}));let n=0;
@@ -132,31 +143,40 @@ function panelView(){
   h+='<div class="fm"><select id="gt" aria-label="Equipo"><option value="'+m.a+'">'+esc(T[m.a])+'</option><option value="'+m.b+'">'+esc(T[m.b])+'</option></select><input id="gp" maxlength="'+MAX_PLAYER+'" placeholder="Jugador" aria-label="Jugador"><input id="gm" class="mi" type="number" min="1" max="200" placeholder="Min" aria-label="Minuto"><button class="btn" data-add>Agregar gol</button></div>';
   gl.forEach(g=>h+='<div class="gl"><span class="dy mn">'+(g.min?g.min+'’':'')+'</span><span>'+esc(g.p)+'</span><span class="dy">'+esc(T[g.t])+'</span><button data-del="'+g.i+'">Quitar</button></div>');
   return h+'<p class="sub">El resultado del partido se calcula con los goles cargados.</p>'}
+function loginView(){
+  return '<h2 class="d">Administración</h2><p class="sub">Ingresá con la cuenta de administrador para cargar resultados.</p><form id="login" class="fm"><input type="email" name="email" autocomplete="username" required placeholder="Email" aria-label="Email"><input type="password" name="password" autocomplete="current-password" required placeholder="Contraseña" aria-label="Contraseña"><button class="btn">Entrar</button></form><p class="sub" id="lerr"></p>'}
 function logoUp(f,c){
   if(!f)return;
   if(!/^image\//.test(f.type)||f.size>MAX_LOGO_BYTES){alert('Elegí una imagen de hasta 5 MB.');return}
   const fr=new FileReader();
-  fr.onload=()=>{const im=new Image();im.onload=()=>{const z=96,cv=document.createElement('canvas');cv.width=cv.height=z;const s=Math.min(im.width,im.height);cv.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,z,z);S[c].l[upIdx]=cleanLogo(cv.toDataURL('image/png'));save();render()};im.src=fr.result};
+  fr.onload=()=>{const im=new Image();im.onload=()=>{const z=96,cv=document.createElement('canvas');cv.width=cv.height=z;const s=Math.min(im.width,im.height);cv.getContext('2d').drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,z,z);S[c].l[upIdx]=cleanLogo(cv.toDataURL('image/png'));save(c);render()};im.src=fr.result};
   fr.readAsDataURL(f)}
-const ADMIN_ENABLED=['','localhost','127.0.0.1'].includes(location.hostname);
-function isAdm(){return ADMIN_ENABLED&&(location.pathname.replace(/\/+$/,'')==='/admin'||location.hash==='#admin')}
+const quiereAdmin=()=>location.pathname.replace(/\/+$/,'')==='/admin'||location.hash==='#admin';
+const isAdm=()=>!!session;
 function ro(){
   const a=document.getElementById('app'),sw=(i,cl,t)=>{const x=document.createElement('span');x.className=cl;x.textContent=t;i.replaceWith(x)};
   a.querySelectorAll('input.sc').forEach(i=>sw(i,'sc ro',i.value===''?'–':i.value));
   a.querySelectorAll('input.nm').forEach(i=>sw(i,'nm ro',i.value));
   a.querySelectorAll('select').forEach(i=>sw(i,'',i.options[i.selectedIndex].text))}
 function render(){
+  const login=quiereAdmin()&&!session;
   if(view==='panel'&&!isAdm())view='ma';
-  document.getElementById('track').innerHTML=[0,1,2,3,4,5].map(i=>'<i'+(stageDone(i)?' class="on"':'')+'></i>').join('');
+  document.getElementById('track').innerHTML=[0,1,2,3,4,5].map(i=>'<i'+(listo&&stageDone(i)?' class="on"':'')+'></i>').join('');
   document.getElementById('tabs').innerHTML=CATS.concat([{id:'cal',n:'Calendario'}],isAdm()?[{id:'panel',n:'Panel'}]:[]).map(c=>'<button role="tab" aria-selected="'+(view===c.id)+'" tabindex="'+(view===c.id?0:-1)+'" data-v="'+c.id+'">'+c.n+'</button>').join('');
-  document.getElementById('app').innerHTML=(view==='cal'?calView():view==='panel'?panelView():catView(view))+(isAdm()?'<button class="reset">Borrar todos los datos</button>':'');
-  document.getElementById('adm').hidden=!isAdm();if(!isAdm())ro()}
+  let body;
+  if(!listo)body='<p class="sub">Cargando los datos…</p>';
+  else if(login)body=loginView();
+  else body=(view==='cal'?calView():view==='panel'?panelView():catView(view))+(isAdm()?'<button class="reset">Borrar todos los datos</button> <button class="lk" data-logout>Cerrar sesión</button>':'');
+  document.getElementById('app').innerHTML=body;
+  document.getElementById('adm').hidden=!isAdm();
+  if(listo&&!isAdm()&&!login)ro()}
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-v]');if(b){view=b.dataset.v;render();scrollTo(0,0)}
   const gl=e.target.closest('[data-gl]');if(gl){pc=view;pm=gl.dataset.gl;view='panel';render();scrollTo(0,0)}
   const u=e.target.closest('[data-up]');if(u){upIdx=+u.dataset.up;document.getElementById('fi').click()}
-  if(e.target.dataset.add!==undefined){const p=document.getElementById('gp').value.trim().slice(0,MAX_PLAYER);if(p){S[pc].go.push({m:pm,t:+document.getElementById('gt').value,p,min:cleanMin(document.getElementById('gm').value)});setScore(pc,matchList(pc).find(x=>x.key===pm));save();render()}}
-  const dl=e.target.closest('[data-del]');if(dl){S[pc].go.splice(+dl.dataset.del,1);setScore(pc,matchList(pc).find(x=>x.key===pm));save();render()}
+  if(e.target.closest('[data-logout]'))db.auth.signOut();
+  if(e.target.dataset.add!==undefined){const p=document.getElementById('gp').value.trim().slice(0,MAX_PLAYER);if(p){S[pc].go.push({m:pm,t:+document.getElementById('gt').value,p,min:cleanMin(document.getElementById('gm').value)});setScore(pc,matchList(pc).find(x=>x.key===pm));save(pc);render()}}
+  const dl=e.target.closest('[data-del]');if(dl){S[pc].go.splice(+dl.dataset.del,1);setScore(pc,matchList(pc).find(x=>x.key===pm));save(pc);render()}
   if(e.target.classList.contains('reset')&&confirm('¿Borrar todos los equipos y resultados?')){S=fresh();save();render()}});
 document.addEventListener('change',e=>{
   const t=e.target,c=(view==='panel'?pc:view);
@@ -168,7 +188,12 @@ document.addEventListener('change',e=>{
   else if(t.dataset.p!==undefined)S[c].k[t.dataset.p+'p']=t.value==='0'||t.value==='1'?t.value:'';
   else if(t.dataset.n!==undefined)S[c].t[+t.dataset.n]=cleanName(t.value,'Equipo '+(+t.dataset.n+1));
   else return;
-  save();render()});
+  save(c);render()});
+document.addEventListener('submit',async e=>{
+  if(e.target.id!=='login')return;
+  e.preventDefault();
+  const f=e.target,{error}=await db.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});
+  if(error){const m=document.getElementById('lerr');if(m)m.textContent='Email o contraseña incorrectos.'}});
 document.getElementById('tabs').addEventListener('keydown',e=>{
   if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
   const b=[...document.querySelectorAll('#tabs [data-v]')],i=b.indexOf(document.activeElement);
@@ -176,4 +201,7 @@ document.getElementById('tabs').addEventListener('keydown',e=>{
   view=b[(i+(e.key==='ArrowRight'?1:b.length-1))%b.length].dataset.v;render();scrollTo(0,0);
   document.querySelector('#tabs [data-v="'+view+'"]').focus()});
 addEventListener('hashchange',render);
+db.auth.onAuthStateChange((_e,s)=>{session=s;render()});
+S=fresh();
 render();
+cargar();
